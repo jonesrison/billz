@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roosewells Invoice Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+    }
+    input, select {
+      padding: 5px;
+      margin: 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 6px;
+      text-align: center;
+    }
+    #invoiceOutput {
+      margin-top: 2rem;
+      padding: 1rem;
+      border: 2px solid black;
+    }
+    .invoice-header {
+      text-align: center;
+      font-weight: bold;
+      font-size: 1.4rem;
+      margin-bottom: 1rem;
+    }
+    .header-blocks {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+    }
+    .header-blocks div {
+      width: 48%;
+    }
+    .section {
+      margin-top: 1rem;
+    }
+    .section p {
+      margin: 0.2rem 0;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <h1>🧾 Roosewells Invoice Generator</h1>
+
+  <label>Buyer Name: <input type="text" id="buyerName" /></label>
+  <label>GSTIN: <input type="text" id="buyerGSTIN" /></label>
+  <label>Place of Supply: <input type="text" id="place" /></label>
+  <label>Date: <input type="date" id="date" /></label>
+
+  <h3>Product Entry</h3>
+  <label>Description: <input type="text" id="desc" /></label>
+  <label>HSN: <input type="text" id="hsn" /></label>
+  <label>Qty: <input type="number" id="qty" /></label>
+  <label>Unit Price: <input type="number" id="price" /></label>
+  <label>Discount %: <input type="number" id="discount" value="0" /></label>
+  <button onclick="addItem()">Add Item</button>
+
+  <table id="itemsTable">
+    <thead>
+      <tr>
+        <th>S.No</th><th>Description</th><th>HSN</th><th>Qty</th><th>Price</th><th>Disc%</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>Net</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <button onclick="generateInvoice()">Generate Invoice</button>
+  <button onclick="downloadPDF()">Download PDF</button>
+
+  <div id="invoiceOutput"></div>
+
+  <script>
+    let invoiceNo = localStorage.getItem('invoiceNo') || 1344;
+    let items = [];
+
+    function addItem() {
+      const desc = document.getElementById('desc').value;
+      const hsn = document.getElementById('hsn').value;
+      const qty = parseInt(document.getElementById('qty').value);
+      const price = parseFloat(document.getElementById('price').value);
+      const discount = parseFloat(document.getElementById('discount').value);
+
+      const total = qty * price;
+      const discountAmt = total * (discount / 100);
+      const taxable = total - discountAmt;
+      const cgst = taxable * 0.025;
+      const sgst = taxable * 0.025;
+      const net = taxable + cgst + sgst;
+
+      items.push({ desc, hsn, qty, price, discount, taxable, cgst, sgst, net });
+
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${items.length}</td>
+        <td>${desc}</td>
+        <td>${hsn}</td>
+        <td>${qty}</td>
+        <td>${price}</td>
+        <td>${discount}</td>
+        <td>${taxable.toFixed(2)}</td>
+        <td>${cgst.toFixed(2)}</td>
+        <td>${sgst.toFixed(2)}</td>
+        <td>${net.toFixed(2)}</td>`;
+      document.querySelector('#itemsTable tbody').appendChild(row);
+
+      document.getElementById('desc').value = "";
+      document.getElementById('hsn').value = "";
+      document.getElementById('qty').value = "";
+      document.getElementById('price').value = "";
+      document.getElementById('discount').value = 0;
+    }
+
+    function generateInvoice() {
+      const buyer = document.getElementById('buyerName').value;
+      const gstin = document.getElementById('buyerGSTIN').value;
+      const place = document.getElementById('place').value;
+      const date = document.getElementById('date').value;
+
+      let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, netTotal = 0, qtyTotal = 0;
+      let rows = '';
+
+      items.forEach((i, index) => {
+        taxableTotal += i.taxable;
+        cgstTotal += i.cgst;
+        sgstTotal += i.sgst;
+        netTotal += i.net;
+        qtyTotal += i.qty;
+        rows += `<tr>
+          <td>${index + 1}</td>
+          <td>${i.desc}</td>
+          <td>${i.hsn}</td>
+          <td>${i.qty}</td>
+          <td>${i.price.toFixed(2)}</td>
+          <td>${i.discount}%</td>
+          <td>${i.taxable.toFixed(2)}</td>
+          <td>${i.cgst.toFixed(2)}</td>
+          <td>${i.sgst.toFixed(2)}</td>
+          <td>${i.net.toFixed(2)}</td>
+        </tr>`;
+      });
+
+      const html = `
+        <div class="invoice-header">TAX INVOICE</div>
+        <div class="header-blocks">
+          <div>
+            <strong>ROOSEWELLS TRADERS</strong><br>
+            16/381, Alamin Shopping Complex, Kattoor Road<br>
+            Irinjalakuda Tana Centre, Thrissur District<br>
+            Ph: 98462 54340<br>
+            Pincode: 680121
+          </div>
+          <div>
+            <strong>SHIPPING ADDRESS</strong><br>
+            Frills ‘N’ Flora<br>
+            TNRA 6, Puthenvettozhi, Chembukavu<br>
+            Thrissur<br>
+            Pincode: 680020
+          </div>
+        </div>
+
+        <div class="section">
+          <p><strong>Party Details:</strong> 32AALCP2218B1ZZ</p>
+          <p><strong>${buyer}</strong></p>
+          <p><strong>Invoice No:</strong> ${invoiceNo} | <strong>Date:</strong> ${date}</p>
+          <p><strong>Place of supply:</strong> ${place} | <strong>Reverse Charge:</strong> N</p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>S.NO.</th>
+              <th>Description Of Goods</th>
+              <th>HSN/SAC</th>
+              <th>QTY</th>
+              <th>UNIT</th>
+              <th>Unit Price</th>
+              <th>Total</th>
+              <th>Discount %</th>
+              <th>Discount</th>
+              <th>Taxable Amount</th>
+              <th>CGST</th>
+              <th>CGST Amt</th>
+              <th>SGST</th>
+              <th>SGST Amt</th>
+              <th>Net Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+
+        <div class="section">
+          <p><strong>Total:</strong> ₹${netTotal.toFixed(2)}</p>
+          <p><strong>GRAND TOTAL:</strong> ${qtyTotal} PCS</p>
+          <table>
+            <tr><th>TAX RATE</th><th>TAXABLE AMT</th><th>CGST AMT</th><th>SGST AMT</th><th>TOTAL TAX</th></tr>
+            <tr>
+              <td>5.00%</td>
+              <td>₹${taxableTotal.toFixed(2)}</td>
+              <td>₹${cgstTotal.toFixed(2)}</td>
+              <td>₹${sgstTotal.toFixed(2)}</td>
+              <td>₹${(cgstTotal + sgstTotal).toFixed(2)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <p><strong>Declaration:</strong> Certified that all the particulars shown in the above Invoice are true and correct</p>
+          <p><strong>Payment Terms:</strong><br>
+            Account Number: 923020044254418<br>
+            Account Holder's Name: Rajesh Jose Chittilappilly Kokkat<br>
+            IFSC Code: UTIB0000879<br>
+            Branch: Irinjalakuda
+          </p>
+          <p><strong>Receiver's Signature: ____________________</strong></p>
+        </div>`;
+
+      document.getElementById('invoiceOutput').innerHTML = html;
+      invoiceNo++;
+      localStorage.setItem('invoiceNo', invoiceNo);
+    }
+
+    function downloadPDF() {
+      const element = document.getElementById('invoiceOutput');
+      if (!element.innerHTML.trim()) {
+        alert("Please generate the invoice first.");
+        return;
+      }
+      html2pdf().set({
+        margin: 0.2,
+        filename: `Invoice_${invoiceNo - 1}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      }).from(element).save();
+    }
+  </script>
+</body>
+</html>
